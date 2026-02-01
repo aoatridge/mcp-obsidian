@@ -6,6 +6,7 @@ import { FileSystemService } from "./src/filesystem.js";
 import { FrontmatterHandler } from "./src/frontmatter.js";
 import { PathFilter } from "./src/pathfilter.js";
 import { SearchService } from "./src/search.js";
+import { GraphService } from "./src/graph.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -53,6 +54,7 @@ const pathFilter = new PathFilter();
 const frontmatterHandler = new FrontmatterHandler();
 const fileSystem = new FileSystemService(vaultPath, pathFilter, frontmatterHandler);
 const searchService = new SearchService(vaultPath, pathFilter);
+const graphService = new GraphService(vaultPath, pathFilter);
 const server = new Server({
     name: "mcp-obsidian",
     version: VERSION
@@ -372,6 +374,101 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                         }
                     }
                 }
+            },
+            {
+                name: "get_graph",
+                description: "Get the complete link graph of the vault. Returns all notes as nodes and their connections (links) as edges. Useful for understanding vault structure and finding relationships.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        prettyPrint: {
+                            type: "boolean",
+                            description: "Format JSON response with indentation (default: false)",
+                            default: false
+                        }
+                    }
+                }
+            },
+            {
+                name: "get_graph_stats",
+                description: "Get graph statistics including orphan notes (no connections), hub notes (most connected), and unresolved links. Useful for vault maintenance and understanding knowledge structure.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        hubCount: {
+                            type: "number",
+                            description: "Number of top hub notes to return (default: 10)",
+                            default: 10
+                        },
+                        prettyPrint: {
+                            type: "boolean",
+                            description: "Format JSON response with indentation (default: false)",
+                            default: false
+                        }
+                    }
+                }
+            },
+            {
+                name: "get_backlinks",
+                description: "Get all notes that link TO a specific note. Useful for understanding what references a particular concept or page.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "Path to the note (can omit .md extension)"
+                        },
+                        prettyPrint: {
+                            type: "boolean",
+                            description: "Format JSON response with indentation (default: false)",
+                            default: false
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "get_outlinks",
+                description: "Get all links FROM a specific note. Shows what a note references, and whether those targets exist.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "Path to the note (can omit .md extension)"
+                        },
+                        prettyPrint: {
+                            type: "boolean",
+                            description: "Format JSON response with indentation (default: false)",
+                            default: false
+                        }
+                    },
+                    required: ["path"]
+                }
+            },
+            {
+                name: "get_local_graph",
+                description: "Get a subgraph around a specific note, including notes within N hops. Useful for exploring the neighborhood of a concept without loading the entire graph.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        path: {
+                            type: "string",
+                            description: "Path to the center note (can omit .md extension)"
+                        },
+                        depth: {
+                            type: "number",
+                            description: "Number of hops from center note to include (default: 1)",
+                            default: 1
+                        },
+                        prettyPrint: {
+                            type: "boolean",
+                            description: "Format JSON response with indentation (default: false)",
+                            default: false
+                        }
+                    },
+                    required: ["path"]
+                }
             }
         ]
     };
@@ -603,6 +700,70 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                                 size: stats.totalSize,
                                 recent: stats.recentlyModified
                             }, null, indent)
+                        }
+                    ]
+                };
+            }
+            case "get_graph": {
+                const graph = await graphService.getGraph();
+                const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(graph, null, indent)
+                        }
+                    ]
+                };
+            }
+            case "get_graph_stats": {
+                const hubCount = trimmedArgs.hubCount || 10;
+                const stats = await graphService.getGraphStats(hubCount);
+                const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(stats, null, indent)
+                        }
+                    ]
+                };
+            }
+            case "get_backlinks": {
+                const result = await graphService.getBacklinks(trimmedArgs.path);
+                const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, indent)
+                        }
+                    ]
+                };
+            }
+            case "get_outlinks": {
+                const result = await graphService.getOutlinks(trimmedArgs.path);
+                const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(result, null, indent)
+                        }
+                    ]
+                };
+            }
+            case "get_local_graph": {
+                const graph = await graphService.getLocalGraph({
+                    path: trimmedArgs.path,
+                    depth: trimmedArgs.depth || 1
+                });
+                const indent = trimmedArgs.prettyPrint ? 2 : undefined;
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(graph, null, indent)
                         }
                     ]
                 };

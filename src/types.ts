@@ -145,3 +145,56 @@ export interface VaultStats {
     modified: number;  // timestamp
   }>;
 }
+
+// Graph types
+export interface GraphNode {
+  id: string;           // Note path (e.g., "folder/note.md")
+  label: string;        // Note name without extension
+  links: number;        // Total connections (in + out)
+  outlinks: number;     // Links FROM this note
+  backlinks: number;    // Links TO this note
+}
+
+export interface GraphEdge {
+  from: string;         // Source note path
+  to: string;           // Target note path
+  label?: string;       // Link text/alias if present
+}
+
+export interface Graph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface GraphStats {
+  totalNodes: number;
+  totalEdges: number;
+  orphans: string[];              // Notes with no connections
+  hubs: Array<{                   // Most connected notes
+    path: string;
+    connections: number;
+  }>;
+  unresolvedLinks: string[];      // Links to non-existent notes
+}
+
+export interface LocalGraphParams {
+  path: string;
+  depth?: number;       // How many hops from center node (default: 1)
+}
+
+export interface BacklinksResult {
+  path: string;
+  backlinks: Array<{
+    from: string;       // Note that links to this one
+    context?: string;   // Surrounding text for context
+  }>;
+}
+
+export interface OutlinksResult {
+  path: string;
+  outlinks: Array<{
+    to: string;         // Note this one links to
+    resolved: boolean;  // Whether target exists
+    alias?: string;     // Link alias if present
+  }>;
+}
